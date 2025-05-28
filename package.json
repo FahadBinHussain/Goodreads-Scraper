@@ -1,0 +1,20 @@
+{
+  "name": "goodreads-scraper",
+  "version": "1.0.0",
+  "description": "A Node.js scraper for Goodreads book details.",
+  "main": "scraper.js",
+  "scripts": {
+    "start": "node scraper.js"
+  },
+  "keywords": [
+    "goodreads",
+    "scraper",
+    "books"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12"
+  }
+} 
