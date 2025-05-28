@@ -26,11 +26,67 @@ async function scrapeGoodreads(url) {
         characters: []
     };
 
+    // --- BEGIN DIRECT CHARACTER EXTRACTION ---
+    // This needs to come first to ensure we collect characters before anything else
+    // This is the simplest and most reliable approach that works consistently
+    $('a').each((i, element) => {
+        const href = $(element).attr('href');
+        if (href && href.includes('/characters/')) {
+            const text = $(element).text().trim();
+            if (text && !bookDetails.characters.includes(text)) {
+                bookDetails.characters.push(text);
+            }
+        }
+    });
+    // --- END DIRECT CHARACTER EXTRACTION ---
+
+    // --- BEGIN CHARACTERS SECTION EXTRACTION ---
+    // Look for Characters section specifically
+    $('dt').each((i, el) => {
+        const label = $(el).text().trim();
+        if (label === 'Characters') {
+            const dd = $(el).next('dd');
+            dd.find('a[href*="/characters/"]').each((idx, charEl) => {
+                const charName = $(charEl).text().trim();
+                if (charName && !bookDetails.characters.includes(charName)) {
+                    bookDetails.characters.push(charName);
+                }
+            });
+        }
+    });
+    // --- END CHARACTERS SECTION EXTRACTION ---
+
     // --- BEGIN __NEXT_DATA__ PARSING ---
     const nextDataScript = $('script#__NEXT_DATA__[type="application/json"]');
     let nextDataParsed = false;
     if (nextDataScript.length > 0) {
         try {
+            // First try: Direct regex search for character data in the JSON string
+            // This is more reliable than navigating the complex JSON structure
+            const nextDataContent = nextDataScript.html();
+            
+            // Use a more comprehensive regex pattern to find all characters
+            // This pattern looks for any character object in the JSON
+            const charPattern = /"characters"\s*:\s*\[([\s\S]*?)\]/g;
+            const charMatches = nextDataContent.match(charPattern);
+            
+            if (charMatches && charMatches.length > 0) {
+                charMatches.forEach(characterArray => {
+                    // Extract individual character objects from the array
+                    const namePattern = /"name"\s*:\s*"([^"]+)"/g;
+                    let nameMatch;
+                    while ((nameMatch = namePattern.exec(characterArray)) !== null) {
+                        if (nameMatch[1]) {
+                            const charName = nameMatch[1];
+                            if (!bookDetails.characters.includes(charName)) {
+                                bookDetails.characters.push(charName);
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Second try: Parse the JSON and navigate the structure
             const nextDataJson = JSON.parse(nextDataScript.html());
             // console.log("__NEXT_DATA__ found, attempting to parse props.pageProps.apolloState..."); // Debug log
 
@@ -86,9 +142,9 @@ async function scrapeGoodreads(url) {
                             // Characters
                             // The structure of characters is now confirmed to be item.details.characters
                             // e.g., item.details.characters: [{"__typename":"Character","name":"Character Name"}]
-                            if (item.details && item.details.characters && Array.isArray(item.details.characters) && bookDetails.characters.length === 0) {
+                            if (item.details && item.details.characters && Array.isArray(item.details.characters)) {
                                 item.details.characters.forEach(char => {
-                                    if (char && char.name) {
+                                    if (char && char.name && !bookDetails.characters.includes(char.name)) {
                                         bookDetails.characters.push(char.name);
                                     }
                                 });
@@ -372,7 +428,8 @@ async function scrapeGoodreads(url) {
         const seriesElementUser = $('.Text__subdued.Text__regular.Text__italic.Text__title3.Text > a[href*="/series/"]').first();
         if (seriesElementUser.length > 0) {
             const seriesText = seriesElementUser.text().trim();
-            const match = seriesText.match(/^(.*?)(?:[\s#]+([\w\d.]+))?$/);
+            // Updated regex to capture more complex position formats
+            const match = seriesText.match(/^(.*?)(?:[\s#]+([0-9.,\-]+))?$/);
             if (match && match[1]) {
                 bookDetails.seriesName = match[1].trim();
                 if (match[2]) {
@@ -393,7 +450,8 @@ async function scrapeGoodreads(url) {
             const seriesLinkFeatured = $('.BookDetails .FeaturedDetails a[href*="/series/"]');
             if (seriesLinkFeatured.length > 0) {
                 const seriesFullText = seriesLinkFeatured.first().text().trim();
-                const seriesMatch = seriesFullText.match(/^(.*?)(?:[\s#]+([\w\d.]+))?$/);
+                // Updated regex to capture more complex position formats
+                const seriesMatch = seriesFullText.match(/^(.*?)(?:[\s#]+([0-9.,\-]+))?$/);
                 if (seriesMatch && seriesMatch[1]) {
                     bookDetails.seriesName = seriesMatch[1].trim();
                     if (seriesMatch[2]) {
@@ -415,7 +473,8 @@ async function scrapeGoodreads(url) {
             const seriesLinkGeneric = $('a[href*="/series/"][id*="bookSeries"]'); // Generic selector
             if (seriesLinkGeneric.length > 0) {
                 const seriesText = seriesLinkGeneric.first().text().trim();
-                 const match = seriesText.match(/^(.*?)(?:[\s#]+([\w\d.]+))?$/);
+                // Updated regex to capture more complex position formats
+                const match = seriesText.match(/^(.*?)(?:[\s#]+([0-9.,\-]+))?$/);
                 if (match && match[1]) {
                     bookDetails.seriesName = match[1].trim();
                     if (match[2]) {
@@ -438,84 +497,19 @@ async function scrapeGoodreads(url) {
          }
     }
 
-    // Additional character extraction attempts if still not found
-    if (bookDetails.characters.length === 0) {
-        // First check: Standard description list
-        $('dt').each((i, el) => {
-            const label = $(el).text().trim().toLowerCase();
-            if (label === 'characters') {
-                const dd = $(el).next('dd');
-                dd.find('a[href*="/characters/"]').each((idx, charEl) => {
-                    const charName = $(charEl).text().trim();
-                    if (charName) {
-                        bookDetails.characters.push(charName);
-                    }
-                });
-            }
-        });
-        
-        // Second check: TruncatedContent structure
-        if (bookDetails.characters.length === 0) {
-            $('dt:contains("Characters")').each((i, el) => {
-                const dd = $(el).next('dd');
-                dd.find('.TruncatedContent__text a').each((idx, charEl) => {
-                    const charName = $(charEl).text().trim();
-                    if (charName) {
-                        bookDetails.characters.push(charName);
-                    }
-                });
-            });
-        }
-        
-        // Third check: Look for character links within specific parent containers
-        if (bookDetails.characters.length === 0) {
-            $('.BookPageMetadataSection__containerContent').each((i, container) => {
-                const containerHtml = $(container).html();
-                if (containerHtml && containerHtml.toLowerCase().includes('characters')) {
-                    $(container).find('a[href*="/characters/"]').each((idx, charEl) => {
-                        const charName = $(charEl).text().trim();
-                        if (charName) {
-                            bookDetails.characters.push(charName);
-                        }
-                    });
-                }
-            });
-        }
-        
-        // Fourth check: Direct from the __NEXT_DATA__ JSON as a fallback
-        if (bookDetails.characters.length === 0) {
-            const nextDataScript = $('script#__NEXT_DATA__[type="application/json"]');
-            if (nextDataScript.length > 0) {
-                try {
-                    const nextDataContent = nextDataScript.html();
-                    
-                    // Look for patterns in the JSON string that would indicate character data
-                    const charMatches = nextDataContent.match(/"characters":\s*\[\s*{[^}]*"name":\s*"([^"]+)"/g);
-                    if (charMatches && charMatches.length > 0) {
-                        charMatches.forEach(match => {
-                            const nameMatch = match.match(/"name":\s*"([^"]+)"/);
-                            if (nameMatch && nameMatch[1]) {
-                                const charName = nameMatch[1];
-                                bookDetails.characters.push(charName);
-                            }
-                        });
-                    }
-                } catch (e) {
-                    // Silently ignore parsing errors
-                }
-            }
-        }
-        
-        // Fifth check: Generic links with character URLs as a last resort
-        if (bookDetails.characters.length === 0) {
-            $('a[href*="/characters/"]').each((idx, charEl) => {
-                const charName = $(charEl).text().trim();
-                if (charName) {
-                    bookDetails.characters.push(charName);
-                }
-            });
+    // Special handling for series with numbers in the name
+    if (bookDetails.seriesName && !bookDetails.positionInSeries) {
+        // Check for patterns like "Series Name #X" or "Series Name #X,Y"
+        const numberMatch = bookDetails.seriesName.match(/#([0-9.,\-]+)$/);
+        if (numberMatch && numberMatch[1]) {
+            bookDetails.positionInSeries = numberMatch[1];
+            // Remove the position from the series name
+            bookDetails.seriesName = bookDetails.seriesName.replace(/#[0-9.,\-]+$/, '').trim();
         }
     }
+
+    // No need for additional character extraction attempts since we now have three methods
+    // that run at the beginning of the function
 
     // Clean up empty character arrays
     if (bookDetails.characters && bookDetails.characters.length === 0) {
@@ -537,9 +531,10 @@ async function scrapeGoodreads(url) {
 }
 
 // Example usage:
-const bookUrl = 'https://www.goodreads.com/book/show/16082707-the-martian'; // Default or example URL
-// You can pass the URL as a command line argument:
-// const bookUrl = process.argv[2];
+// Get URL from command line argument
+const commandLineUrl = process.argv[2];
+// Use command line URL if provided, otherwise use default
+const bookUrl = commandLineUrl || 'https://www.goodreads.com/book/show/16082707-the-martian';
 
 if (bookUrl) {
   scrapeGoodreads(bookUrl);
