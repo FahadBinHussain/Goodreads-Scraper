@@ -180,16 +180,29 @@ async function scrapeGoodreads(url) {
 
     // Book Summary
     let summary = '';
+    
     // Try a more specific selector for the summary parts
-    $('.BookPageMetadataSection__description .DetailsLayoutRightParagraph__widthConstrained .Formatted[data-testid="description"] > span').each((i, el) => {
-        summary += $(el).text().trim() + '\n';
-    });
-    if (!summary) { // Fallback if the above doesn't work
-         $('.BookPageMetadataSection__description .DetailsLayoutRightParagraph__widthConstrained .Formatted').each((i, el) => {
-            summary += $(el).text().trim() + '\n';
-        });
+    const descriptionContainer = $('.BookPageMetadataSection__description .DetailsLayoutRightParagraph__widthConstrained .Formatted');
+    
+    if (descriptionContainer.length > 0) {
+        // Get the HTML content to preserve <br> tags
+        const html = descriptionContainer.html();
+        
+        if (html) {
+            // Replace <br> tags with newlines before extracting text
+            const modifiedHtml = html.replace(/<br\s*\/?>/gi, '\n');
+            
+            // Load the modified HTML and extract text, which will now have newlines
+            const $temp = cheerio.load(`<div>${modifiedHtml}</div>`);
+            summary = $temp('div').text().trim();
+        } else {
+            // Fallback to direct text extraction if HTML is not available
+            summary = descriptionContainer.text().trim();
+        }
     }
-    bookDetails.bookSummary = summary.trim().replace(/\n+/g, '\n'); // Clean up multiple newlines
+    
+    // Keep original formatting with preserved line breaks
+    bookDetails.bookSummary = summary;
 
     // Publication Date & Publisher
     const publicationInfoText = $('[data-testid="publicationInfo"]').text().trim();
@@ -516,7 +529,8 @@ async function scrapeGoodreads(url) {
         // Keep it as an empty array, or set to null based on preference. Empty array is often better.
     }
     
-    console.log(bookDetails);
+    // Output as formatted JSON to preserve line breaks
+    console.log(JSON.stringify(bookDetails, null, 2));
     return bookDetails;
 
   } catch (error) {
