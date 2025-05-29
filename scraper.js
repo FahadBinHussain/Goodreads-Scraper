@@ -12,6 +12,7 @@ async function scrapeGoodreads(url) {
 
     const bookDetails = {
         bookName: null,
+        author: null,
         imageUrl: null,
         bookSummary: null,
         publicationDate: null,
@@ -175,6 +176,57 @@ async function scrapeGoodreads(url) {
     // Book Name
     bookDetails.bookName = $('h1[data-testid="bookTitle"]').text().trim();
 
+    // Author Name
+    const authorElement = $('span[data-testid="authorName"]');
+    if (authorElement.length > 0) {
+        bookDetails.author = authorElement.text().trim();
+    } else {
+        // Fallback method 1: Look for author in metadata
+        const authorLink = $('.ContributorLink__name').first();
+        if (authorLink.length > 0) {
+            bookDetails.author = authorLink.text().trim();
+        } else {
+            // Fallback method 2: Look for author in NEXT_DATA
+            if (nextDataScript.length > 0) {
+                try {
+                    const nextDataJson = JSON.parse(nextDataScript.html());
+                    if (nextDataJson && nextDataJson.props && nextDataJson.props.pageProps && 
+                        nextDataJson.props.pageProps.apolloState) {
+                        
+                        const apolloState = nextDataJson.props.pageProps.apolloState;
+                        for (const key in apolloState) {
+                            if (apolloState.hasOwnProperty(key) && 
+                                typeof apolloState[key] === 'object' && 
+                                apolloState[key] !== null) {
+                                
+                                const item = apolloState[key];
+                                if (item.author && item.author.name) {
+                                    bookDetails.author = item.author.name;
+                                    break;
+                                } else if (item.authors && Array.isArray(item.authors) && item.authors.length > 0) {
+                                    if (item.authors[0].name) {
+                                        bookDetails.author = item.authors[0].name;
+                                        break;
+                                    }
+                                } else if (item.contributors && Array.isArray(item.contributors)) {
+                                    for (const contributor of item.contributors) {
+                                        if (contributor.role === 'AUTHOR' && contributor.name) {
+                                            bookDetails.author = contributor.name;
+                                            break;
+                                        }
+                                    }
+                                    if (bookDetails.author) break;
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // Silently ignore if JSON is malformed
+                }
+            }
+        }
+    }
+
     // Image URL
     bookDetails.imageUrl = $('.BookCover__image .ResponsiveImage').attr('src');
 
@@ -299,6 +351,20 @@ async function scrapeGoodreads(url) {
                 if (jsonData.numberOfPages && !bookDetails.numberOfPages) { // Only set if not already from NEXT_DATA
                     bookDetails.numberOfPages = parseInt(jsonData.numberOfPages, 10);
                     detailsFoundBySelectors = true;
+                }
+                // Extract author if not already found
+                if (!bookDetails.author && jsonData.author) {
+                    if (typeof jsonData.author === 'string') {
+                        bookDetails.author = jsonData.author;
+                    } else if (typeof jsonData.author === 'object' && jsonData.author.name) {
+                        bookDetails.author = jsonData.author.name;
+                    } else if (Array.isArray(jsonData.author) && jsonData.author.length > 0) {
+                        if (typeof jsonData.author[0] === 'string') {
+                            bookDetails.author = jsonData.author[0];
+                        } else if (typeof jsonData.author[0] === 'object' && jsonData.author[0].name) {
+                            bookDetails.author = jsonData.author[0].name;
+                        }
+                    }
                 }
                 // Could also be a source for: jsonData.name, jsonData.image, jsonData.bookFormat
                 // jsonData.author, jsonData.aggregateRating.ratingValue, jsonData.aggregateRating.ratingCount
@@ -527,6 +593,15 @@ async function scrapeGoodreads(url) {
     // Clean up empty character arrays
     if (bookDetails.characters && bookDetails.characters.length === 0) {
         // Keep it as an empty array, or set to null based on preference. Empty array is often better.
+    }
+    
+    // Final attempt to extract author if previous methods failed
+    if (!bookDetails.author) {
+        // Look for author link with specific classes or near the book title
+        const authorLink = $('.BookPageTitleSection a[href*="/author/show/"]').first();
+        if (authorLink.length > 0) {
+            bookDetails.author = authorLink.text().trim();
+        }
     }
     
     // Output as formatted JSON to preserve line breaks
