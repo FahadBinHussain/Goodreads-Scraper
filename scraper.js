@@ -615,6 +615,30 @@ async function scrapeGoodreads(url) {
         // Keep it as an empty array, or set to null based on preference. Empty array is often better.
     }
     
+    // Clean up series name - remove words like "ভলিউম" (Volume) and extract position properly
+    if (bookDetails.seriesName) {
+        // List of words to ignore in series names (can be expanded as needed)
+        const ignoreWords = ['ভলিউম'];
+        
+        // Remove ignore words from series name
+        let cleanedSeriesName = bookDetails.seriesName;
+        ignoreWords.forEach(word => {
+            cleanedSeriesName = cleanedSeriesName.replace(new RegExp(`\\s*${word}\\s*`, 'gi'), ' ');
+        });
+        
+        // Extract position if it's in the format like "#1/1" or "1/1"
+        const positionMatch = cleanedSeriesName.match(/(#?\s*)([\d\/\.\-]+)$/);
+        if (positionMatch && positionMatch[2]) {
+            if (!bookDetails.positionInSeries) {
+                bookDetails.positionInSeries = positionMatch[2].trim();
+            }
+            // Remove the position part from the series name
+            cleanedSeriesName = cleanedSeriesName.replace(/(#?\s*)([\d\/\.\-]+)$/, '').trim();
+        }
+        
+        bookDetails.seriesName = cleanedSeriesName.trim();
+    }
+    
     // Output as formatted JSON to preserve line breaks
     console.log(JSON.stringify(bookDetails, null, 2));
     return bookDetails;
