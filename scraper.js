@@ -639,6 +639,12 @@ async function scrapeGoodreads(url) {
         bookDetails.seriesName = cleanedSeriesName.trim();
     }
     
+    // Format positionInSeries to add spaces after commas
+    if (bookDetails.positionInSeries) {
+        // Replace commas with comma+space
+        bookDetails.positionInSeries = bookDetails.positionInSeries.replace(/,/g, ', ');
+    }
+    
     // Output as formatted JSON to preserve line breaks
     console.log(JSON.stringify(bookDetails, null, 2));
     return bookDetails;
