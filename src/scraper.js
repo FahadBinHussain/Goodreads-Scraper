@@ -660,17 +660,24 @@ async function scrapeGoodreads(url) {
   }
 }
 
-// Example usage:
-// Get URL from command line argument
-const commandLineUrl = process.argv[2];
-// Use command line URL if provided, otherwise use default
-const bookUrl = commandLineUrl || 'https://www.goodreads.com/book/show/16082707-the-martian';
-
-if (bookUrl) {
-  scrapeGoodreads(bookUrl);
-} else {
-  console.log("Please provide a Goodreads book URL as a command line argument.");
-  console.log("Example: node scraper.js https://www.goodreads.com/book/show/16082707-the-martian");
-}
-
+/**
+ * Scrape book details from a Goodreads URL
+ * 
+ * @param {string} url - The Goodreads book URL to scrape
+ * @returns {Promise<Object>} - A promise that resolves to a book details object with the following properties:
+ *   @property {string} bookName - The name of the book
+ *   @property {string[]} authors - An array of author names
+ *   @property {string} imageUrl - URL to the book cover image
+ *   @property {string} bookSummary - Summary/description of the book
+ *   @property {string} publicationDate - Publication date of the book
+ *   @property {string} publisher - Publisher of the book
+ *   @property {string[]} genres - Array of genres the book belongs to
+ *   @property {string} ratings - Number of ratings
+ *   @property {string} averageRating - Average rating score
+ *   @property {number} numberOfPages - Number of pages in the book
+ *   @property {string} language - Language of the book
+ *   @property {string} seriesName - Name of the series the book belongs to (if applicable)
+ *   @property {string} positionInSeries - Position in the series (if applicable)
+ *   @property {string[]} characters - Array of character names in the book
+ */
 module.exports = { scrapeGoodreads }; 
